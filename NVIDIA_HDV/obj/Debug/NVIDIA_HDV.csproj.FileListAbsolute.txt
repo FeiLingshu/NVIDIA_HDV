@@ -1,0 +1,11 @@
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\bin\Debug\NVIDIA_HDV.exe.config
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\bin\Debug\NVIDIA_HDV.exe
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\bin\Debug\NVIDIA_HDV.pdb
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.csproj.AssemblyReference.cache
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.Form1.resources
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.Properties.Resources.resources
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.csproj.GenerateResource.cache
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.csproj.CoreCompileInputs.cache
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.exe
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.pdb
+C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\obj\Debug\NVIDIA_HDV.Form2.resources
