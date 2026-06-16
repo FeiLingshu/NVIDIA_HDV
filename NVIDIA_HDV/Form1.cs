@@ -25,11 +25,20 @@ namespace NVIDIA_HDV
             this.button1.Click += Button1_Click;
         }
 
+        // Source: https://www.nvidia.cn/etc.clientlibs/nvidiaweb/clientlibs/clientlib-driverflownvlookup.min.c7e04ab2fe866978f47a0aaeaedc8c3b.js
+        // Source: Element(#manualSearch-4) in https://www.nvidia.cn
+
         private volatile bool HTTPSTATE = false;
 
         private string HTTPPATH = string.Empty;
 
         private string HTTPCACHE = string.Empty;
+
+        private volatile bool BETA = false;
+
+        private string[] BETADATA = null;
+
+        private readonly object betalocker = new object();
 
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -78,6 +87,17 @@ namespace NVIDIA_HDV
                     }));
                 }
             });
+            FetchHtmlAsync("https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/beta").ContinueWith(result =>
+            {
+                if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()))
+                {
+                    lock (betalocker)
+                    {
+                        BETADATA = result.Result.Trim().Split('\n');
+                    }
+                }
+                BETA = true;
+            });
         }
 
         private void RadioButton1_Click(object sender, EventArgs e)
@@ -108,10 +128,10 @@ namespace NVIDIA_HDV
 
         private void Button1_Click(object sender, EventArgs e)
         {
-            if (HTTPSTATE)
+            if (HTTPSTATE && BETA)
             {
                 string JScache = HTTPCACHE;
-                Regex regex = new Regex(@"requestParamaters=requestParamaters\.replace\(""numberOfResults=\d*?"",""numberOfResults=\d*?""\);");
+                Regex regex = new Regex(@"requestParamaters\s*?=\s*?requestParamaters\.replace\(""numberOfResults=\d*?"",\s*?""numberOfResults=\d*?""\);");
                 Match rmatch = regex.Match(JScache);
                 if (rmatch.Success)
                 {
@@ -132,6 +152,24 @@ namespace NVIDIA_HDV
                     replace = replace.Replace("%%ADD%%", add);
                     replace = replace.Replace("%%REPLACE%%", "requestParamaters");
                     JScache = JScache.Replace(rmatch.Value.Trim(), rmatch.Value.Trim() + replace);
+                    lock (betalocker)
+                    {
+                        if (BETADATA != null && BETADATA.Length > 0)
+                        {
+                            Regex _regex = new Regex(@"DriverSearch:\s*?function\(.*?,\s*?osID,.*?,\s*?dch,.*?\)\s*?\{");
+                            Match _rmatch = _regex.Match(JScache);
+                            if (_rmatch.Success)
+                            {
+                                string[] ifstrings = new string[BETADATA.Length];
+                                for (int i = 0; i < BETADATA.Length; i++)
+                                {
+                                    ifstrings[i] = $"osID==\"{BETADATA[i].Trim()}\"";
+                                }
+                                string idcheck = $"if({string.Join("||", ifstrings)}){{dch=\"1\";}}";
+                                JScache = JScache.Replace(_rmatch.Value.Trim(), _rmatch.Value.Trim() + idcheck);
+                            }
+                        }
+                    }
                     string path = HTTPPATH.Replace("https:/", string.Empty).Replace("/", "\\");
                     using (Process self = Process.GetCurrentProcess())
                     {
@@ -193,8 +231,8 @@ namespace NVIDIA_HDV
         }
 
         #region Static Resource
-        private const string JS = "if(%%SWITCH%%){requestParamaters=requestParamaters.replace(/dch=1/g,\"dch=0\");}if(%%GRD%%){requestParamaters=requestParamaters.replace(/isWHQL=\\d/g,\"isWHQL=1\");requestParamaters=requestParamaters.replace(/isWHQL=null/g,\"isWHQL=1\");requestParamaters=requestParamaters.replace(/upCRD=\\d/g,\"upCRD=0\");requestParamaters=requestParamaters.replace(/upCRD=null/g,\"upCRD=0\");}if(%%STD%%){requestParamaters=requestParamaters.replace(/isWHQL=\\d/g,\"isWHQL=0\");requestParamaters=requestParamaters.replace(/isWHQL=null/g,\"isWHQL=0\");requestParamaters=requestParamaters.replace(/upCRD=\\d/g,\"upCRD=1\");requestParamaters=requestParamaters.replace(/upCRD=null/g,\"upCRD=1\");}let replacestd=\"numberOfResults=%%VALUE%%\";let addstd=\"%%ADD%%\";if(addstd!=\"\"){replacestd=addstd+'&'+replacestd;}requestParamaters=requestParamaters.replace(/numberOfResults=\\d+/g,replacestd);console.log(\"NVIDIA_HDV 已替换查询参数 ->\",requestParamaters);";
-        // if(%%SWITCH%%){requestParamaters=requestParamaters.replace(/dch=1/g,"dch=0");}if(%%GRD%%){requestParamaters=requestParamaters.replace(/isWHQL=\d/g,"isWHQL=1");requestParamaters=requestParamaters.replace(/isWHQL=null/g,"isWHQL=1");requestParamaters=requestParamaters.replace(/upCRD=\d/g,"upCRD=0");requestParamaters=requestParamaters.replace(/upCRD=null/g,"upCRD=0");}if(%%STD%%){requestParamaters=requestParamaters.replace(/isWHQL=\d/g,"isWHQL=0");requestParamaters=requestParamaters.replace(/isWHQL=null/g,"isWHQL=0");requestParamaters=requestParamaters.replace(/upCRD=\d/g,"upCRD=1");requestParamaters=requestParamaters.replace(/upCRD=null/g,"upCRD=1");}let replacestd="numberOfResults=%%VALUE%%";let addstd="%%ADD%%";if(addstd!=""){replacestd=addstd+'&'+replacestd;}requestParamaters=requestParamaters.replace(/numberOfResults=\d+/g,replacestd);console.log("NVIDIA_HDV 已替换查询参数 ->",requestParamaters);
+        private const string JS = "if(%%SWITCH%%){requestParamaters=requestParamaters.replace(/dch=1/g,\"dch=0\");}else{requestParamaters=requestParamaters.replace(/dch=\\d/g,\"dch=1\");requestParamaters=requestParamaters.replace(/dch=null/g,\"dch=1\");}if(%%GRD%%){requestParamaters=requestParamaters.replace(/isWHQL=\\d/g,\"isWHQL=1\");requestParamaters=requestParamaters.replace(/isWHQL=null/g,\"isWHQL=1\");requestParamaters=requestParamaters.replace(/upCRD=\\d/g,\"upCRD=0\");requestParamaters=requestParamaters.replace(/upCRD=null/g,\"upCRD=0\");}if(%%STD%%){requestParamaters=requestParamaters.replace(/isWHQL=\\d/g,\"isWHQL=0\");requestParamaters=requestParamaters.replace(/isWHQL=null/g,\"isWHQL=0\");requestParamaters=requestParamaters.replace(/upCRD=\\d/g,\"upCRD=1\");requestParamaters=requestParamaters.replace(/upCRD=null/g,\"upCRD=1\");}let replacestd=\"numberOfResults=%%VALUE%%\";let addstd=\"%%ADD%%\";if(addstd!=\"\"){replacestd=addstd+'&'+replacestd;}requestParamaters=requestParamaters.replace(/numberOfResults=\\d+/g,replacestd);console.log(\"NVIDIA_HDV 已替换查询参数 ->\",requestParamaters);";
+        // if(%%SWITCH%%){requestParamaters=requestParamaters.replace(/dch=1/g,"dch=0");}else{requestParamaters=requestParamaters.replace(/dch=\d/g,"dch=1");requestParamaters=requestParamaters.replace(/dch=null/g,"dch=1");}if(%%GRD%%){requestParamaters=requestParamaters.replace(/isWHQL=\d/g,"isWHQL=1");requestParamaters=requestParamaters.replace(/isWHQL=null/g,"isWHQL=1");requestParamaters=requestParamaters.replace(/upCRD=\d/g,"upCRD=0");requestParamaters=requestParamaters.replace(/upCRD=null/g,"upCRD=0");}if(%%STD%%){requestParamaters=requestParamaters.replace(/isWHQL=\d/g,"isWHQL=0");requestParamaters=requestParamaters.replace(/isWHQL=null/g,"isWHQL=0");requestParamaters=requestParamaters.replace(/upCRD=\d/g,"upCRD=1");requestParamaters=requestParamaters.replace(/upCRD=null/g,"upCRD=1");}let replacestd="numberOfResults=%%VALUE%%";let addstd="%%ADD%%";if(addstd!=""){replacestd=addstd+'&'+replacestd;}requestParamaters=requestParamaters.replace(/numberOfResults=\d+/g,replacestd);console.log("NVIDIA_HDV 已替换查询参数 ->",requestParamaters);
         #endregion
     }
 }
