@@ -218,7 +218,7 @@ namespace NVIDIA_HDV
                         replace = replace.Replace("%%SWITCH%%", Standard.IsChecked == true ? "true" : "false");
                         string add = string.Empty;
                         ushort.TryParse(this.Release.Text, out ushort value_r);
-                        ushort.TryParse(this.Version.Text, out ushort value_v);
+                        double.TryParse(this.Version.Text, out double value_v);
                         if (value_r > 0)
                         {
                             add = $"release={value_r}";
