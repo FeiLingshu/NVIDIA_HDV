@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -113,6 +114,9 @@ namespace NVIDIA_HDV
             string HTTPPATH = null;
             string HTTPCACHE = null;
             string[] BETADATA = null;
+            Regex htmlregex = null;
+            List<string> htmllist = new List<string>();
+            List<string> csslist = new List<string>();
             this.Loaded += (s, e) =>
             {
                 Task.Run(async () =>
@@ -131,38 +135,69 @@ namespace NVIDIA_HDV
                                 "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7");
                             bool HTTPSTATE = false;
                             bool BETA = false;
-                            var result = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache");
-                            await result;
-                            if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()) && IsValidUrl(result.Result.Trim()))
+                            try
                             {
-                                HTTPPATH = result.Result.Trim();
-                                var result_1 = FetchHtmlAsync(client, result.Result.Trim());
-                                await result_1;
-                                if (result_1.IsCompleted && !string.IsNullOrEmpty(result_1.Result.Trim()))
+                                var result = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache");
+                                await result;
+                                if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()) && IsValidUrl(result.Result.Trim()))
                                 {
-                                    HTTPCACHE = result_1.Result.Trim();
-                                    HTTPSTATE = true;
+                                    HTTPPATH = result.Result.Trim();
+                                    var result_1 = FetchHtmlAsync(client, result.Result.Trim());
+                                    await result_1;
+                                    if (result_1.IsCompleted && !string.IsNullOrEmpty(result_1.Result.Trim()))
+                                    {
+                                        HTTPCACHE = result_1.Result.Trim();
+                                        HTTPSTATE = true;
+                                    }
+                                    else
+                                    {
+                                        if (result_1.IsFaulted) _ = result_1.Exception;
+                                    }
                                 }
                                 else
                                 {
-                                    if (result_1.IsFaulted) _ = result_1.Exception;
+                                    if (result.IsFaulted) _ = result.Exception;
+                                }
+                                var result_theme = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache_theme");
+                                await result_theme;
+                                if (result_theme.IsCompleted && !string.IsNullOrEmpty(result_theme.Result.Trim()))
+                                {
+                                    var urls = result_theme.Result.Trim().Split('\n');
+                                    foreach (var url in urls)
+                                    {
+                                        if (!IsValidUrl(url)) continue;
+                                        if (url.EndsWith("/"))
+                                        {
+                                            htmllist.Add(url);
+                                        }
+                                        else if (url.EndsWith("*"))
+                                        {
+                                            htmlregex = new Regex($"^{url.Substring(0, url.Length - 1)}{@"\d+/$"}");
+                                            htmllist.Add($"{url}/");
+                                        }
+                                        else
+                                        {
+                                            csslist.Add(url);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    if (result_theme.IsFaulted) _ = result_theme.Exception;
+                                }
+                                var result_2 = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/beta");
+                                await result_2;
+                                if (result_2.IsCompleted && !string.IsNullOrEmpty(result_2.Result.Trim()))
+                                {
+                                    BETADATA = result_2.Result.Trim().Split('\n');
+                                    BETA = true;
+                                }
+                                else
+                                {
+                                    if (result_2.IsFaulted) _ = result_2.Exception;
                                 }
                             }
-                            else
-                            {
-                                if (result.IsFaulted) _ = result.Exception;
-                            }
-                            var result_2 = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/beta");
-                            await result_2;
-                            if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()))
-                            {
-                                BETADATA = result.Result.Trim().Split('\n');
-                                BETA = true;
-                            }
-                            else
-                            {
-                                if (result.IsFaulted) _ = result.Exception;
-                            }
+                            catch (Exception) { }
                             if (HTTPSTATE && BETA)
                             {
                                 this.Dispatcher.Invoke(() =>
@@ -283,7 +318,7 @@ namespace NVIDIA_HDV
                             this.Hide();
                             try
                             {
-                                MainWindow window = new MainWindow("https://www.nvidia.cn/drivers", HTTPPATH, _)
+                                MainWindow window = new MainWindow("https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), csslist.ToArray())
                                 {
                                     Owner = this
                                 };
@@ -313,11 +348,12 @@ namespace NVIDIA_HDV
         private object MLBD = null;
         private object MRBD = null;
 
-        private static async Task<string> FetchHtmlAsync(HttpClient client, string url)
+        public async Task<string> FetchHtmlAsync(HttpClient client, string url)
         {
             try
             {
-                HttpResponseMessage response = await client.GetAsync(url);
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                HttpResponseMessage response = await client.SendAsync(request);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync();
             }
@@ -327,12 +363,80 @@ namespace NVIDIA_HDV
             }
         }
 
-        private static bool IsValidUrl(string url)
+        private bool IsValidUrl(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
             if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
                 return false;
             return uri.Scheme == Uri.UriSchemeHttps;
+        }
+
+        private byte[] Bytes(string origin)
+        {
+            origin = Regex.Replace(origin, "background-color:#f7f7f7", "background-color: #202020", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color: #f7f7f7", "background-color: #202020", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color:#ffffff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color: #ffffff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color:#fff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color: #fff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color:#c0c0c0", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color: #c0c0c0", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color:#f5f5f5", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color: #f5f5f5", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color:#fefefe", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background-color: #fefefe", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color:#ccc", "color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color: #ccc", "color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color:#1a1a1a", "color: #808080", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color: #1a1a1a", "color: #808080", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color:#000000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color: #000000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color:#000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color: #000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color:#333333", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "(?<!-)color: #333333", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background: #ffffff", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background: #fff", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background: #000000", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background: #000", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            origin = Regex.Replace(origin, "background: #fefefe", "background: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            return new UTF8Encoding(false).GetBytes(origin);
+        }
+
+        public async Task<byte[]> GetHtml(string url)
+        {
+            using (var handler = new HttpClientHandler())
+            {
+                handler.AllowAutoRedirect = true;
+                using (var client = new HttpClient(handler))
+                {
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                    client.DefaultRequestHeaders.Accept.ParseAdd(
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                    client.DefaultRequestHeaders.AcceptLanguage.ParseAdd(
+                        "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7");
+                    try
+                    {
+                        var result = FetchHtmlAsync(client, url);
+                        await result;
+                        if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()))
+                        {
+                            return Bytes(result.Result.Trim());
+                        }
+                        else
+                        {
+                            if (result.IsFaulted) _ = result.Exception;
+                            return null;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        return null;
+                    }
+                }
+            }
         }
     }
 }

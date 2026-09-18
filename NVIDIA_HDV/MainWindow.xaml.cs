@@ -1,7 +1,9 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -14,16 +16,22 @@ namespace NVIDIA_HDV
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly string HTTPSURL = "https://www.nvidia.cn/drivers";
-        private readonly string JSURL = "https://www.nvidia.cn/etc.clientlibs/nvidiaweb/clientlibs/clientlib-driverflownvlookup.min.c368d6b5f62f780cdd3a1099075e6fa2.js";
-        private readonly string JSFILE = "C:\\FeiLingshu\\Projects\\NVIDIA_HDV\\NVIDIA_HDV\\bin\\Debug\\replace.js";
+        private readonly string HTTPSURL = null;
+        private readonly string JSURL = null;
+        private readonly string JSFILE = null;
+        private readonly Regex regex = null;
+        private readonly string[] htmllist = null;
+        private readonly string[] csslist = null;
 
-        public MainWindow(string httpsurl, string jsurl, string jsfile)
+        public MainWindow(string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] csslist)
         {
             InitializeComponent();
-            this.HTTPSURL = httpsurl;
-            this.JSURL = jsurl;
-            this.JSFILE = jsfile;
+            this.HTTPSURL = httpsurl ?? string.Empty;
+            this.JSURL = jsurl ?? string.Empty;
+            this.JSFILE = jsfile ?? string.Empty;
+            this.htmllist = htmllist;
+            this.regex = regex;
+            this.csslist = csslist;
             this.MouseLeftButtonDown += (s, e) => MLBD = e.OriginalSource;
             this.MouseRightButtonDown += (s, e) => MRBD = e.OriginalSource;
             this.TITLE.MouseLeftButtonDown += (s, e) =>
@@ -107,6 +115,14 @@ namespace NVIDIA_HDV
             await this.WebView24WPF.EnsureCoreWebView2Async();
             var coreWebView = this.WebView24WPF.CoreWebView2;
             coreWebView.AddWebResourceRequestedFilter(JSURL, CoreWebView2WebResourceContext.Script);
+            foreach (var html in htmllist)
+            {
+                coreWebView.AddWebResourceRequestedFilter(html, CoreWebView2WebResourceContext.Document);
+            }
+            foreach (var css in csslist)
+            {
+                coreWebView.AddWebResourceRequestedFilter(css, CoreWebView2WebResourceContext.Stylesheet‌);
+            }
             coreWebView.WebResourceRequested += OnWebResourceRequested;
             this.WebView24WPF.Source = new Uri(HTTPSURL);
             this.HOME.IsEnabled = true;
@@ -115,7 +131,7 @@ namespace NVIDIA_HDV
 
         private async void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
         {
-            if (e.Request.Uri.Contains(JSURL))
+            if (e.Request.Uri == JSURL)
             {
                 var deferral = e.GetDeferral();
                 try
@@ -128,12 +144,51 @@ namespace NVIDIA_HDV
                     }
                     var stream = new MemoryStream(jsContent);
                     e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
-                        stream, 200, "OK", "Content-Type: application/javascript"
+                        stream, 200, "OK", "Content-Type: application/javascript; charset=utf-8"
                     );
                 }
                 finally
                 {
                     deferral.Complete();
+                }
+            }
+            else
+            {
+                if ((regex != null && regex.IsMatch(e.Request.Uri)) || htmllist.Contains(e.Request.Uri))
+                {
+                    var deferral = e.GetDeferral();
+                    try
+                    {
+                        var owner = (Settings)this.Owner;
+                        var data = await owner.GetHtml(e.Request.Uri);
+                        var stream = new MemoryStream(data);
+                        e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
+                            stream, 200, "OK", "Content-Type: text/html; charset=utf-8"
+                        );
+                    }
+                    catch (Exception) { }
+                    finally
+                    {
+                        deferral.Complete();
+                    }
+                }
+                else if (csslist.Contains(e.Request.Uri))
+                {
+                    var deferral = e.GetDeferral();
+                    try
+                    {
+                        var owner = (Settings)this.Owner;
+                        var data = await owner.GetHtml(e.Request.Uri);
+                        var stream = new MemoryStream(data);
+                        e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
+                            stream, 200, "OK", "Content-Type: text/css; charset=utf-8"
+                        );
+                    }
+                    catch (Exception) { }
+                    finally
+                    {
+                        deferral.Complete();
+                    }
                 }
             }
         }
@@ -142,7 +197,7 @@ namespace NVIDIA_HDV
 
         private const int GWL_STYLE = -16;
         private const int WS_MAXIMIZEBOX = 0x00010000;
-            
+
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern long GetWindowLong64(IntPtr hWnd, long nIndex);
         [DllImport("user32.dll", EntryPoint = "GetWindowLong", CharSet = CharSet.Unicode, SetLastError = true)]
