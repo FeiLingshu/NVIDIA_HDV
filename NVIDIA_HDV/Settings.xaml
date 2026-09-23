@@ -656,7 +656,7 @@
                     LineStackingStrategy="BlockLineHeight"
                     SnapsToDevicePixels="True"
                     UseLayoutRounding="True"
-                    Text="查询特定版本号：" />
+                    Text="查询精确版本号：" />
                 <TextBox
                     HorizontalAlignment="Left"
                     Width="60"
@@ -681,7 +681,7 @@
                     LineStackingStrategy="BlockLineHeight"
                     SnapsToDevicePixels="True"
                     UseLayoutRounding="True"
-                    Text="查询特定版本号：" />
+                    Text="查询模糊版本号：" />
                 <TextBox
                     HorizontalAlignment="Left"
                     Text="0"
