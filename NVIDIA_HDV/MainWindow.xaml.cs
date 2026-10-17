@@ -21,15 +21,17 @@ namespace NVIDIA_HDV
         private readonly string JSFILE = null;
         private readonly Regex regex = null;
         private readonly string[] htmllist = null;
+        private readonly string[] uicsslist = null;
         private readonly string[] csslist = null;
 
-        public MainWindow(string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] csslist)
+        public MainWindow(string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] uicsslist, string[] csslist)
         {
             InitializeComponent();
             this.HTTPSURL = httpsurl ?? string.Empty;
             this.JSURL = jsurl ?? string.Empty;
             this.JSFILE = jsfile ?? string.Empty;
             this.htmllist = htmllist;
+            this.uicsslist = uicsslist;
             this.regex = regex;
             this.csslist = csslist;
             this.MouseLeftButtonDown += (s, e) => MLBD = e.OriginalSource;
@@ -119,6 +121,10 @@ namespace NVIDIA_HDV
             {
                 coreWebView.AddWebResourceRequestedFilter(html, CoreWebView2WebResourceContext.Document);
             }
+            foreach (var uicss in uicsslist)
+            {
+                coreWebView.AddWebResourceRequestedFilter(uicss, CoreWebView2WebResourceContext.Stylesheet‌);
+            }
             foreach (var css in csslist)
             {
                 coreWebView.AddWebResourceRequestedFilter(css, CoreWebView2WebResourceContext.Stylesheet‌);
@@ -141,11 +147,15 @@ namespace NVIDIA_HDV
                     {
                         jsContent = new byte[fs.Length];
                         await fs.ReadAsync(jsContent, 0, jsContent.Length);
+                        fs.Close();
                     }
-                    var stream = new MemoryStream(jsContent);
-                    e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
-                        stream, 200, "OK", "Content-Type: application/javascript; charset=utf-8"
-                    );
+                    if (jsContent != null)
+                    {
+                        var stream = new MemoryStream(jsContent);
+                        e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
+                            stream, 200, "OK", "Content-Type: application/javascript; charset=utf-8"
+                        );
+                    }
                 }
                 finally
                 {
@@ -160,11 +170,35 @@ namespace NVIDIA_HDV
                     try
                     {
                         var owner = (Settings)this.Owner;
-                        var data = await owner.GetHtml(e.Request.Uri);
-                        var stream = new MemoryStream(data);
-                        e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
-                            stream, 200, "OK", "Content-Type: text/html; charset=utf-8"
-                        );
+                        var data = await owner.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Document);
+                        if (data != null)
+                        {
+                            var stream = new MemoryStream(data);
+                            e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
+                                stream, 200, "OK", "Content-Type: text/html; charset=utf-8"
+                            );
+                        }
+                    }
+                    catch (Exception) { }
+                    finally
+                    {
+                        deferral.Complete();
+                    }
+                }
+                else if (uicsslist.Contains(e.Request.Uri))
+                {
+                    var deferral = e.GetDeferral();
+                    try
+                    {
+                        var owner = (Settings)this.Owner;
+                        var data = await owner.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Stylesheet, true);
+                        if (data != null)
+                        {
+                            var stream = new MemoryStream(data);
+                            e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
+                                stream, 200, "OK", "Content-Type: text/css; charset=utf-8"
+                            );
+                        }
                     }
                     catch (Exception) { }
                     finally
@@ -178,11 +212,14 @@ namespace NVIDIA_HDV
                     try
                     {
                         var owner = (Settings)this.Owner;
-                        var data = await owner.GetHtml(e.Request.Uri);
-                        var stream = new MemoryStream(data);
-                        e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
-                            stream, 200, "OK", "Content-Type: text/css; charset=utf-8"
-                        );
+                        var data = await owner.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Stylesheet);
+                        if (data != null)
+                        {
+                            var stream = new MemoryStream(data);
+                            e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
+                                stream, 200, "OK", "Content-Type: text/css; charset=utf-8"
+                            );
+                        }
                     }
                     catch (Exception) { }
                     finally

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Web.WebView2.Core;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -116,6 +117,7 @@ namespace NVIDIA_HDV
             string[] BETADATA = null;
             Regex htmlregex = null;
             List<string> htmllist = new List<string>();
+            List<string> uicsslist = new List<string>();
             List<string> csslist = new List<string>();
             this.Loaded += (s, e) =>
             {
@@ -169,6 +171,10 @@ namespace NVIDIA_HDV
                                         if (url.EndsWith("/"))
                                         {
                                             htmllist.Add(url);
+                                        }
+                                        else if (url.EndsWith("*kaizen"))
+                                        {
+                                            uicsslist.Add(url.Substring(0, url.Length - 7));
                                         }
                                         else if (url.EndsWith("*"))
                                         {
@@ -318,7 +324,7 @@ namespace NVIDIA_HDV
                             this.Hide();
                             try
                             {
-                                MainWindow window = new MainWindow("https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), csslist.ToArray())
+                                MainWindow window = new MainWindow("https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), uicsslist.ToArray(), csslist.ToArray())
                                 {
                                     Owner = this
                                 };
@@ -371,39 +377,139 @@ namespace NVIDIA_HDV
             return uri.Scheme == Uri.UriSchemeHttps;
         }
 
-        private byte[] Bytes(string origin)
+        private static readonly Dictionary<string, string> BgColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            origin = Regex.Replace(origin, "background-color:#f7f7f7", "background-color: #202020", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color: #f7f7f7", "background-color: #202020", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color:#ffffff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color: #ffffff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color:#fff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color: #fff", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color:#c0c0c0", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color: #c0c0c0", "background-color: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color:#f5f5f5", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color: #f5f5f5", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color:#fefefe", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background-color: #fefefe", "background-color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color:#ccc", "color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color: #ccc", "color: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color:#1a1a1a", "color: #808080", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color: #1a1a1a", "color: #808080", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color:#000000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color: #000000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color:#000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color: #000", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color:#333333", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "(?<!-)color: #333333", "color: #C0C0C0", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background: #ffffff", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background: #fff", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background: #000000", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background: #000", "background: #303030", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
-            origin = Regex.Replace(origin, "background: #fefefe", "background: #404040", RegexOptions.IgnoreCase | RegexOptions.ECMAScript);
+            { "#f7f7f7", "#202020" },
+            { "#ffffff", "#303030" },
+            { "#fff", "#303030" },
+            { "#c0c0c0", "#303030" },
+            { "#f5f5f5", "#404040" },
+            { "#fefefe", "#404040" },
+            { "#000000", "#303030" },
+            { "#000", "#303030" }
+        };
+
+        private static readonly Dictionary<string, string> ColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "#ccc", "#404040" },
+            { "#1a1a1a", "#808080" },
+            { "#000000", "#C0C0C0" },
+            { "#000", "#C0C0C0" },
+            { "#333333", "#C0C0C0" }
+        };
+
+        private static readonly Regex CssRegex = new Regex(
+            @"\b(background-color|background|color)\s*:\s*(#[0-9A-Fa-f]{3,6})\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
+
+        private string Bytes(string origin)
+        {
+            if (string.IsNullOrEmpty(origin)) return origin;
+            return CssRegex.Replace(origin, match =>
+            {
+                string prop = match.Groups[1].Value;
+                string color = match.Groups[2].Value;
+                string newColor = null;
+                if (prop.Equals("color", StringComparison.OrdinalIgnoreCase))
+                {
+                    ColorMap.TryGetValue(color, out newColor);
+                }
+                else
+                {
+                    BgColorMap.TryGetValue(color, out newColor);
+                }
+                return (newColor == null) ? match.Value : $"{prop}:{newColor}";
+            });
+        }
+
+        private static readonly Regex[] HtmlRegex = new Regex[6]
+        {
+            new Regex(
+                @"\b(\w+)-light\b",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            ),
+            new Regex(
+                @"<body[^>]*(?<=[\s""'])class\s*=\s*[""']",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            ),
+            new Regex(
+                @"((?<=[\s""'])class\s*=\s*[""'])([^""']*)([""'])",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            ),
+            new Regex(
+                @"((?<=[\s""'])fill\s*=\s*[""'])black([""']\s*/>)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            ),
+            new Regex(
+                @"(<g[^>]*(?<=[\s""'])id\s*=\s*[""']nvidia-logo[""'])([^>]*>)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            ),
+            new Regex(
+                @"(.*)(?<=[\s""'])nv-teaser--bg-white(?=[\s""'])(.*)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            )
+        };
+
+        private byte[] HtmlBytes(string origin)
+        {
+            if (string.IsNullOrEmpty(origin)) return null;
+            origin = HtmlRegex[0].Replace(origin, "$1-dark");
+            origin = HtmlRegex[1].Replace(origin, "$0nv-dark ");
+            origin = HtmlRegex[2].Replace(origin, match =>
+            {
+                HashSet<string> strings = new HashSet<string>(match.Groups[2].Value.Split(' '), StringComparer.OrdinalIgnoreCase);
+                if ((strings.Contains("nav-header") && strings.Contains("desktop-nav"))
+                    || strings.Contains("global-footer-container")
+                    || strings.Contains("global-footer")
+                    /*|| strings.Contains("color-black")*/)
+                {
+                    return $"{match.Groups[1].Value}nv-dark {match.Groups[2].Value}{match.Groups[3].Value}";
+                }
+                if (strings.Contains("nv-teaser--bg-white"))
+                {
+                    return HtmlRegex[5].Replace(match.Value, "$1nv-teaser--bg-black$2");
+                }
+                return match.Value;
+            });
+            origin = HtmlRegex[3].Replace(origin, "$1#76B900$2");
+            origin = HtmlRegex[4].Replace(origin, "$1 fill=\"#76B900\"$2");
+            origin = Bytes(origin);
             return new UTF8Encoding(false).GetBytes(origin);
         }
 
-        public async Task<byte[]> GetHtml(string url)
+        private static readonly bool UIoverride = false;
+
+        private static readonly Regex[] UICssRegex = new Regex[2]
+        {
+            new Regex(
+                @"\b--color-black\s*:\s*(#[0-9A-Fa-f]{3,6})\b",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            ),
+            new Regex(
+                @"\b--color-white\s*:\s*(#[0-9A-Fa-f]{3,6})\b",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled
+            )
+        };
+
+        private byte[] UICssBytes(string origin)
+        {
+            if (string.IsNullOrEmpty(origin)) return null;
+            if (UIoverride)
+            {
+                string color = UICssRegex[0].Match(origin).Groups[1].Value;
+                origin = UICssRegex[1].Replace(origin, $"--color-white:{color}");
+            }
+            return new UTF8Encoding(false).GetBytes(origin);
+        }
+
+        private byte[] CssBytes(string origin)
+        {
+            origin = Bytes(origin);
+            return new UTF8Encoding(false).GetBytes(origin);
+        }
+
+        public async Task<byte[]> GetHttp(string url, CoreWebView2WebResourceContext type, bool isUI = false)
         {
             using (var handler = new HttpClientHandler())
             {
@@ -423,7 +529,15 @@ namespace NVIDIA_HDV
                         await result;
                         if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()))
                         {
-                            return Bytes(result.Result.Trim());
+                            switch (type)
+                            {
+                                case CoreWebView2WebResourceContext.Document:
+                                    return HtmlBytes(result.Result.Trim());
+                                case CoreWebView2WebResourceContext.Stylesheet:
+                                    return isUI ? UICssBytes(result.Result.Trim()) : CssBytes(result.Result.Trim());
+                                default:
+                                    return new UTF8Encoding(false).GetBytes(result.Result.Trim());
+                            }
                         }
                         else
                         {
