@@ -16,6 +16,7 @@ namespace NVIDIA_HDV
     /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly Settings settings = null;
         private readonly string HTTPSURL = null;
         private readonly string JSURL = null;
         private readonly string JSFILE = null;
@@ -24,9 +25,14 @@ namespace NVIDIA_HDV
         private readonly string[] uicsslist = null;
         private readonly string[] csslist = null;
 
-        public MainWindow(string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] uicsslist, string[] csslist)
+        public MainWindow(Window owner, string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] uicsslist, string[] csslist)
         {
             InitializeComponent();
+            this.Owner = owner;
+            if (owner is Settings settings)
+            {
+                this.settings = settings;
+            }
             this.HTTPSURL = httpsurl ?? string.Empty;
             this.JSURL = jsurl ?? string.Empty;
             this.JSFILE = jsfile ?? string.Empty;
@@ -76,6 +82,7 @@ namespace NVIDIA_HDV
             };
             this.HOME.IsEnabled = false;
             this.FLUSH.IsEnabled = false;
+            this.BACK.IsEnabled = false;
             this.HOME.PreviewMouseUp += (s, e) =>
             {
                 if (e.ChangedButton == MouseButton.Left && MLBD == e.OriginalSource) this.WebView24WPF.Source = new Uri(HTTPSURL);
@@ -133,6 +140,7 @@ namespace NVIDIA_HDV
             this.WebView24WPF.Source = new Uri(HTTPSURL);
             this.HOME.IsEnabled = true;
             this.FLUSH.IsEnabled = true;
+            this.BACK.IsEnabled = true;
         }
 
         private async void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
@@ -169,8 +177,7 @@ namespace NVIDIA_HDV
                     var deferral = e.GetDeferral();
                     try
                     {
-                        var owner = (Settings)this.Owner;
-                        var data = await owner.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Document);
+                        var data = await this.settings.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Document);
                         if (data != null)
                         {
                             var stream = new MemoryStream(data);
@@ -190,8 +197,7 @@ namespace NVIDIA_HDV
                     var deferral = e.GetDeferral();
                     try
                     {
-                        var owner = (Settings)this.Owner;
-                        var data = await owner.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Stylesheet, true);
+                        var data = await this.settings.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Stylesheet, true);
                         if (data != null)
                         {
                             var stream = new MemoryStream(data);
@@ -211,8 +217,7 @@ namespace NVIDIA_HDV
                     var deferral = e.GetDeferral();
                     try
                     {
-                        var owner = (Settings)this.Owner;
-                        var data = await owner.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Stylesheet);
+                        var data = await this.settings.GetHttp(e.Request.Uri, CoreWebView2WebResourceContext.Stylesheet);
                         if (data != null)
                         {
                             var stream = new MemoryStream(data);

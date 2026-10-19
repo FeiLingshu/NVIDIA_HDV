@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Media;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -26,6 +27,7 @@ namespace NVIDIA_HDV
         public Settings()
         {
             InitializeComponent();
+            this.Http = GetHttpHost();
             this.MouseLeftButtonDown += (s, e) => MLBD = e.OriginalSource;
             this.MouseRightButtonDown += (s, e) => MRBD = e.OriginalSource;
             this.TITLE.MouseLeftButtonDown += (s, e) =>
@@ -324,11 +326,7 @@ namespace NVIDIA_HDV
                             this.Hide();
                             try
                             {
-                                MainWindow window = new MainWindow("https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), uicsslist.ToArray(), csslist.ToArray())
-                                {
-                                    Owner = this
-                                };
-                                window.ShowDialog();
+                                new MainWindow(this, "https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), uicsslist.ToArray(), csslist.ToArray()).ShowDialog();
                             }
                             catch (Exception exp)
                             {
@@ -354,21 +352,6 @@ namespace NVIDIA_HDV
         private object MLBD = null;
         private object MRBD = null;
 
-        public async Task<string> FetchHtmlAsync(HttpClient client, string url)
-        {
-            try
-            {
-                var request = new HttpRequestMessage(HttpMethod.Get, url);
-                HttpResponseMessage response = await client.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-        }
-
         private bool IsValidUrl(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
@@ -377,7 +360,7 @@ namespace NVIDIA_HDV
             return uri.Scheme == Uri.UriSchemeHttps;
         }
 
-        private static readonly Dictionary<string, string> BgColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        private readonly Dictionary<string, string> BgColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "#f7f7f7", "#202020" },
             { "#ffffff", "#303030" },
@@ -389,7 +372,7 @@ namespace NVIDIA_HDV
             { "#000", "#303030" }
         };
 
-        private static readonly Dictionary<string, string> ColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        private readonly Dictionary<string, string> ColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "#ccc", "#404040" },
             { "#1a1a1a", "#808080" },
@@ -398,7 +381,7 @@ namespace NVIDIA_HDV
             { "#333333", "#C0C0C0" }
         };
 
-        private static readonly Regex CssRegex = new Regex(
+        private readonly Regex CssRegex = new Regex(
             @"\b(background-color|background|color)\s*:\s*(#[0-9A-Fa-f]{3,6})\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
@@ -423,7 +406,7 @@ namespace NVIDIA_HDV
             });
         }
 
-        private static readonly Regex[] HtmlRegex = new Regex[6]
+        private readonly Regex[] HtmlRegex = new Regex[6]
         {
             new Regex(
                 @"\b(\w+)-light\b",
@@ -478,9 +461,9 @@ namespace NVIDIA_HDV
             return new UTF8Encoding(false).GetBytes(origin);
         }
 
-        private static readonly bool UIoverride = false;
+        private readonly bool UIoverride = false;
 
-        private static readonly Regex[] UICssRegex = new Regex[2]
+        private readonly Regex[] UICssRegex = new Regex[2]
         {
             new Regex(
                 @"\b--color-black\s*:\s*(#[0-9A-Fa-f]{3,6})\b",
@@ -509,47 +492,84 @@ namespace NVIDIA_HDV
             return new UTF8Encoding(false).GetBytes(origin);
         }
 
+        public readonly HttpClient Http = null;
+
+        private HttpClient GetHttpHost()
+        {
+            var handler = new HttpClientHandler
+            {
+                UseCookies = true,
+                CookieContainer = new CookieContainer(),
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                AllowAutoRedirect = true
+            };
+            var client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(10)
+            };
+            client.DefaultRequestHeaders.Clear();
+            client.DefaultRequestHeaders.Add("Accept", "*/*");
+            client.DefaultRequestHeaders.Add("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6");
+            client.DefaultRequestHeaders.Add("Accept-Encoding", "gzip, deflate");
+            //client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+            client.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            client.DefaultRequestHeaders.Add("DNT", "1");
+            //client.DefaultRequestHeaders.Add("Host", "www.nvidia.cn");
+            //client.DefaultRequestHeaders.Add("Pragma", "no-cache");
+            //client.DefaultRequestHeaders.Add("Referer", "https://www.nvidia.cn/");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "empty");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "cors");
+            client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-origin");
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0");
+            bool _1 = client.DefaultRequestHeaders.TryAddWithoutValidation("sec-ch-ua", "\"Microsoft Edge\";v=\"120\", \"Chromium\";v=\"120\", \"Not(A:Brand\";v=\"24\"");
+            bool _2 = client.DefaultRequestHeaders.TryAddWithoutValidation("sec-ch-ua-mobile", "?0");
+            bool _3 = client.DefaultRequestHeaders.TryAddWithoutValidation("sec-ch-ua-platform", "\"Windows\"");
+            bool _4 = client.DefaultRequestHeaders.TryAddWithoutValidation("sec-gpc", "1");
+            return client;
+        }
+
+        public async Task<string> FetchHtmlAsync(HttpClient client, string url)
+        {
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                HttpResponseMessage response = await client.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
         public async Task<byte[]> GetHttp(string url, CoreWebView2WebResourceContext type, bool isUI = false)
         {
-            using (var handler = new HttpClientHandler())
+            try
             {
-                handler.AllowAutoRedirect = true;
-                using (var client = new HttpClient(handler))
+                var result = FetchHtmlAsync(Http, url);
+                await result;
+                if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()))
                 {
-                    client.Timeout = TimeSpan.FromSeconds(10);
-                    client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                    client.DefaultRequestHeaders.Accept.ParseAdd(
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-                    client.DefaultRequestHeaders.AcceptLanguage.ParseAdd(
-                        "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7");
-                    try
+                    switch (type)
                     {
-                        var result = FetchHtmlAsync(client, url);
-                        await result;
-                        if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()))
-                        {
-                            switch (type)
-                            {
-                                case CoreWebView2WebResourceContext.Document:
-                                    return HtmlBytes(result.Result.Trim());
-                                case CoreWebView2WebResourceContext.Stylesheet:
-                                    return isUI ? UICssBytes(result.Result.Trim()) : CssBytes(result.Result.Trim());
-                                default:
-                                    return new UTF8Encoding(false).GetBytes(result.Result.Trim());
-                            }
-                        }
-                        else
-                        {
-                            if (result.IsFaulted) _ = result.Exception;
-                            return null;
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        return null;
+                        case CoreWebView2WebResourceContext.Document:
+                            return HtmlBytes(result.Result.Trim());
+                        case CoreWebView2WebResourceContext.Stylesheet:
+                            return isUI ? UICssBytes(result.Result.Trim()) : CssBytes(result.Result.Trim());
+                        default:
+                            return new UTF8Encoding(false).GetBytes(result.Result.Trim());
                     }
                 }
+                else
+                {
+                    if (result.IsFaulted) _ = result.Exception;
+                    return null;
+                }
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
     }
