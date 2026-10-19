@@ -327,6 +327,7 @@ namespace NVIDIA_HDV
                             try
                             {
                                 new MainWindow(this, "https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), uicsslist.ToArray(), csslist.ToArray()).ShowDialog();
+                                GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: false);
                             }
                             catch (Exception exp)
                             {

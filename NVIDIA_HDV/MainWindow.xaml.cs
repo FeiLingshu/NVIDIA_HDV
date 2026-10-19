@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -70,9 +71,28 @@ namespace NVIDIA_HDV
             this.HOME.PreviewMouseDown += blockmd;
             this.FLUSH.PreviewMouseDown += blockmd;
             this.BACK.PreviewMouseDown += blockmd;
+            this.Closing += (s, e) =>
+            {
+                if (this.WebView24WPF.CoreWebView2 == null)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+                cts.Cancel();
+                try
+                {
+                    this.WebView24WPF.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
+                    this.WebView24WPF.Stop();
+                    this.WebView24WPF.Dispose();
+                }
+                catch (Exception) { }
+            };
             this.CLOSE.PreviewMouseUp += (s, e) =>
             {
-                if (e.ChangedButton == MouseButton.Left && MLBD == e.OriginalSource) this.Close();
+                if (e.ChangedButton == MouseButton.Left && MLBD == e.OriginalSource)
+                {
+                    this.Close();
+                }
                 e.Handled = true;
             };
             this.MINI.PreviewMouseUp += (s, e) =>
@@ -112,13 +132,17 @@ namespace NVIDIA_HDV
                     SetWindowLongPtr(selfhandle, GWL_STYLE, style);
                     SetWindowPos(selfhandle, IntPtr.Zero, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
                 }
-                _ = InitializeWebView();
+                _ = InitializeWebView().ContinueWith(t =>
+                {
+                    throw t.Exception;
+                }, TaskContinuationOptions.OnlyOnFaulted);
             };
         }
 
         private object MLBD = null;
         private object MRBD = null;
 
+        private readonly CancellationTokenSource cts = new CancellationTokenSource();
         private async Task InitializeWebView()
         {
             await this.WebView24WPF.EnsureCoreWebView2Async();
@@ -160,6 +184,7 @@ namespace NVIDIA_HDV
                     if (jsContent != null)
                     {
                         var stream = new MemoryStream(jsContent);
+                        if (cts.Token.IsCancellationRequested) return;
                         e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
                             stream, 200, "OK", "Content-Type: application/javascript; charset=utf-8"
                         );
@@ -181,6 +206,7 @@ namespace NVIDIA_HDV
                         if (data != null)
                         {
                             var stream = new MemoryStream(data);
+                            if (cts.Token.IsCancellationRequested) return;
                             e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
                                 stream, 200, "OK", "Content-Type: text/html; charset=utf-8"
                             );
@@ -201,6 +227,7 @@ namespace NVIDIA_HDV
                         if (data != null)
                         {
                             var stream = new MemoryStream(data);
+                            if (cts.Token.IsCancellationRequested) return;
                             e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
                                 stream, 200, "OK", "Content-Type: text/css; charset=utf-8"
                             );
@@ -221,6 +248,7 @@ namespace NVIDIA_HDV
                         if (data != null)
                         {
                             var stream = new MemoryStream(data);
+                            if (cts.Token.IsCancellationRequested) return;
                             e.Response = this.WebView24WPF.CoreWebView2.Environment.CreateWebResourceResponse(
                                 stream, 200, "OK", "Content-Type: text/css; charset=utf-8"
                             );
