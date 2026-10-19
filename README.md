@@ -11,6 +11,8 @@ __用于获取NVIDIA历史驱动的工具程序__
 
 > [!TIP]
 > __目前程序主框架已更新，现在无需复杂操作即可实现按自定义参数进行查询了__
+> - __`2026.10.18` 针对"大体量查询数量经常性超时"的问题给出了解决方案，[点击查看](https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/blob/master/B_INFO/IPFix.md)__
+>> __程序使用 [`Gitee`](https://gitee.com/FeiLingshu/NVIDIA_HDV-cache) 仓库进行关键数据分发，数据由作者本人手动维护，`NVIDIA` 服务器文件更新后无法确保第一时间进行同步，如遇失效问题请[前往B站](https://space.bilibili.com/483822869)联系作者，或耐心等待__
 
 ---
 
