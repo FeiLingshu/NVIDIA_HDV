@@ -24,6 +24,9 @@ namespace NVIDIA_HDV
     /// </summary>
     public partial class Settings : Window
     {
+        public string DNSpath = null;
+        public volatile bool DNSfin = true;
+
         public Settings()
         {
             InitializeComponent();
@@ -125,108 +128,94 @@ namespace NVIDIA_HDV
             {
                 Task.Run(async () =>
                 {
-                    using (var handler = new HttpClientHandler())
+                    bool HTTPSTATE = false;
+                    bool BETA = false;
+                    try
                     {
-                        handler.AllowAutoRedirect = true;
-                        using (var client = new HttpClient(handler))
+                        var result = FetchHtmlAsync(Http, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache");
+                        await result;
+                        if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()) && IsValidUrl(result.Result.Trim()))
                         {
-                            client.Timeout = TimeSpan.FromSeconds(10);
-                            client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                            client.DefaultRequestHeaders.Accept.ParseAdd(
-                                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-                            client.DefaultRequestHeaders.AcceptLanguage.ParseAdd(
-                                "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7");
-                            bool HTTPSTATE = false;
-                            bool BETA = false;
-                            try
+                            HTTPPATH = result.Result.Trim();
+                            var result_1 = FetchHtmlAsync(Http, result.Result.Trim());
+                            await result_1;
+                            if (result_1.IsCompleted && !string.IsNullOrEmpty(result_1.Result.Trim()))
                             {
-                                var result = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache");
-                                await result;
-                                if (result.IsCompleted && !string.IsNullOrEmpty(result.Result.Trim()) && IsValidUrl(result.Result.Trim()))
-                                {
-                                    HTTPPATH = result.Result.Trim();
-                                    var result_1 = FetchHtmlAsync(client, result.Result.Trim());
-                                    await result_1;
-                                    if (result_1.IsCompleted && !string.IsNullOrEmpty(result_1.Result.Trim()))
-                                    {
-                                        HTTPCACHE = result_1.Result.Trim();
-                                        HTTPSTATE = true;
-                                    }
-                                    else
-                                    {
-                                        if (result_1.IsFaulted) _ = result_1.Exception;
-                                    }
-                                }
-                                else
-                                {
-                                    if (result.IsFaulted) _ = result.Exception;
-                                }
-                                var result_theme = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache_theme");
-                                await result_theme;
-                                if (result_theme.IsCompleted && !string.IsNullOrEmpty(result_theme.Result.Trim()))
-                                {
-                                    var urls = result_theme.Result.Trim().Split('\n');
-                                    foreach (var url in urls)
-                                    {
-                                        if (!IsValidUrl(url)) continue;
-                                        if (url.EndsWith("/"))
-                                        {
-                                            htmllist.Add(url);
-                                        }
-                                        else if (url.EndsWith("*kaizen"))
-                                        {
-                                            uicsslist.Add(url.Substring(0, url.Length - 7));
-                                        }
-                                        else if (url.EndsWith("*"))
-                                        {
-                                            htmlregex = new Regex($"^{url.Substring(0, url.Length - 1)}{@"\d+/$"}");
-                                            htmllist.Add($"{url}/");
-                                        }
-                                        else
-                                        {
-                                            csslist.Add(url);
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    if (result_theme.IsFaulted) _ = result_theme.Exception;
-                                }
-                                var result_2 = FetchHtmlAsync(client, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/beta");
-                                await result_2;
-                                if (result_2.IsCompleted && !string.IsNullOrEmpty(result_2.Result.Trim()))
-                                {
-                                    BETADATA = result_2.Result.Trim().Split('\n');
-                                    BETA = true;
-                                }
-                                else
-                                {
-                                    if (result_2.IsFaulted) _ = result_2.Exception;
-                                }
-                            }
-                            catch (Exception) { }
-                            if (HTTPSTATE && BETA)
-                            {
-                                this.Dispatcher.Invoke(() =>
-                                {
-                                    this.Net.Foreground = (SolidColorBrush)this.Resources["Green"];
-                                    this.Net_Status.Foreground = (SolidColorBrush)this.Resources["Green"];
-                                    this.Net_Status.Text = "成功";
-                                    this.GO.IsEnabled = true;
-                                });
+                                HTTPCACHE = result_1.Result.Trim();
+                                HTTPSTATE = true;
                             }
                             else
                             {
-                                this.Dispatcher.Invoke(() =>
-                                {
-                                    this.Net.Foreground = (SolidColorBrush)this.Resources["Red"];
-                                    this.Net_Status.Foreground = (SolidColorBrush)this.Resources["Red"];
-                                    this.Net_Status.Text = "失败";
-                                    this.GO.IsEnabled = false;
-                                });
+                                if (result_1.IsFaulted) _ = result_1.Exception;
                             }
                         }
+                        else
+                        {
+                            if (result.IsFaulted) _ = result.Exception;
+                        }
+                        var result_theme = FetchHtmlAsync(Http, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/cache_theme");
+                        await result_theme;
+                        if (result_theme.IsCompleted && !string.IsNullOrEmpty(result_theme.Result.Trim()))
+                        {
+                            var urls = result_theme.Result.Trim().Split('\n');
+                            foreach (var url in urls)
+                            {
+                                if (!IsValidUrl(url)) continue;
+                                if (url.EndsWith("/"))
+                                {
+                                    htmllist.Add(url);
+                                }
+                                else if (url.EndsWith("*kaizen"))
+                                {
+                                    uicsslist.Add(url.Substring(0, url.Length - 7));
+                                }
+                                else if (url.EndsWith("*"))
+                                {
+                                    htmlregex = new Regex($"^{url.Substring(0, url.Length - 1)}{@"\d+/$"}");
+                                    htmllist.Add($"{url}/");
+                                }
+                                else
+                                {
+                                    csslist.Add(url);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (result_theme.IsFaulted) _ = result_theme.Exception;
+                        }
+                        var result_2 = FetchHtmlAsync(Http, "https://gitee.com/FeiLingshu/NVIDIA_HDV-cache/raw/master/beta");
+                        await result_2;
+                        if (result_2.IsCompleted && !string.IsNullOrEmpty(result_2.Result.Trim()))
+                        {
+                            BETADATA = result_2.Result.Trim().Split('\n');
+                            BETA = true;
+                        }
+                        else
+                        {
+                            if (result_2.IsFaulted) _ = result_2.Exception;
+                        }
+                    }
+                    catch (Exception) { }
+                    if (HTTPSTATE && BETA)
+                    {
+                        this.Dispatcher.Invoke(() =>
+                        {
+                            this.Net.Foreground = (SolidColorBrush)this.Resources["Green"];
+                            this.Net_Status.Foreground = (SolidColorBrush)this.Resources["Green"];
+                            this.Net_Status.Text = "成功";
+                            this.GO.IsEnabled = true;
+                        });
+                    }
+                    else
+                    {
+                        this.Dispatcher.Invoke(() =>
+                        {
+                            this.Net.Foreground = (SolidColorBrush)this.Resources["Red"];
+                            this.Net_Status.Foreground = (SolidColorBrush)this.Resources["Red"];
+                            this.Net_Status.Text = "失败";
+                            this.GO.IsEnabled = false;
+                        });
                     }
                 });
             };
@@ -306,27 +295,27 @@ namespace NVIDIA_HDV
                                     {
                                         need = false;
                                         SystemSounds.Asterisk.Play();
-                                        new Notify(this, "JS代码已生成\n\n详细信息：文件未更改\n此页面关闭后将自动进入NVIDIA官网").ShowDialog();
+                                        new Notify(this, "JS代码已生成\n\n详细信息：文件未更改\n此页面关闭后将自动进入NVIDIA官网", true).ShowDialog();
                                     }
                                 }
                                 if (need)
                                 {
                                     File.WriteAllText(_, JScache, new UTF8Encoding(false));
                                     SystemSounds.Asterisk.Play();
-                                    new Notify(this, "JS代码已生成\n\n详细信息：文件已成功写入\n此页面关闭后将自动进入NVIDIA官网").ShowDialog();
+                                    new Notify(this, "JS代码已生成\n\n详细信息：文件已成功写入\n此页面关闭后将自动进入NVIDIA官网", true).ShowDialog();
                                 }
                             }
                             catch (Exception exp)
                             {
                                 SystemSounds.Hand.Play();
-                                new Notify(this, $"JS代码生成失败\n\n文件无法写入\n详细信息：{exp.Message}").ShowDialog();
+                                new Notify(this, $"JS代码生成失败\n\n文件无法写入\n详细信息：{exp.Message}", true).ShowDialog();
                                 return;
                             }
                             string webview2error = null;
                             this.Hide();
                             try
                             {
-                                new MainWindow(this, "https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), uicsslist.ToArray(), csslist.ToArray()).ShowDialog();
+                                new MainWindow(this, "https://www.nvidia.cn/drivers", HTTPPATH, _, htmlregex, htmllist.ToArray(), uicsslist.ToArray(), csslist.ToArray(), !string.IsNullOrWhiteSpace(DNSpath)).ShowDialog();
                                 GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: false);
                             }
                             catch (Exception exp)
@@ -338,13 +327,13 @@ namespace NVIDIA_HDV
                             if (webview2error != null)
                             {
                                 SystemSounds.Hand.Play();
-                                new Notify(this, $"WebView2组件出现异常\n\n详细信息：{webview2error}").ShowDialog();
+                                new Notify(this, $"WebView2组件出现异常\n\n详细信息：{webview2error}", true).ShowDialog();
                             }
                             return;
                         }
                     }
                     SystemSounds.Hand.Play();
-                    new Notify(this, "JS代码校验失败\n\n请及时向开发者报告此错误").ShowDialog();
+                    new Notify(this, "JS代码校验失败\n\n请及时向开发者报告此错误", true).ShowDialog();
                     return;
                 }
             };

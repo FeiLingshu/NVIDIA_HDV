@@ -341,7 +341,9 @@
             </Border>
         </Grid>
         <Grid
-            Margin="0,30,0,0">
+            x:Name="WebView24WPF_Container"
+            Margin="0,30,0,0"
+            Opacity="1">
             <wv2:WebView2CompositionControl
                 Name="WebView24WPF"
                 Source="{x:Null}"
@@ -351,6 +353,29 @@
                 ClipToBounds="True"
                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+            <Border
+                x:Name="WebView24WPF_Mask"
+                Background="#FF202020"
+                ClipToBounds="True"
+                Visibility="Collapsed"
+                Opacity="0.95">
+                <TextBlock
+                    Foreground="#FFC0C0C0"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    TextAlignment="Left"
+                    FontFamily="Consolas,Microsoft YaHei"
+                    FontWeight="Bold"
+                    FontSize="50">
+                    <Run
+                        Text="尝试连接 ip138.com ..." />
+                    <LineBreak />
+                    <Run
+                        Foreground="#FF808080"
+                        FontSize="30"
+                        Text="正在自动获取 IP 调优数据" />
+                </TextBlock>
+            </Border>
         </Grid>
     </Grid>
 </Window>

@@ -10,16 +10,23 @@ namespace NVIDIA_HDV
     /// </summary>
     public partial class Notify : Window
     {
-        public Notify(Window owner, string infos)
+        public Notify(Window owner, string infos, bool ManualCtrl)
         {
             InitializeComponent();
             this.Owner = owner;
             this.InfoStd.Text = infos;
             if (owner != null)
             {
-                this.WindowStartupLocation = WindowStartupLocation.Manual;
-                this.Left = owner.Left + owner.Width - this.Width - 10;
-                this.Top = owner.Top + 30 + 10;
+                if (ManualCtrl)
+                {
+                    this.WindowStartupLocation = WindowStartupLocation.Manual;
+                    this.Left = owner.Left + owner.Width - this.Width - 10;
+                    this.Top = owner.Top + 30 + 10;
+                }
+                else
+                {
+                    this.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                }
             }
             this.MouseLeftButtonDown += (s, e) => MLBD = e.OriginalSource;
             this.MouseRightButtonDown += (s, e) => MRBD = e.OriginalSource;

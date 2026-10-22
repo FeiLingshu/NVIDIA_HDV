@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -29,7 +31,16 @@ namespace NVIDIA_HDV
                 ProgramStarted.Set();
                 Environment.Exit(0);
             }
-            Settings settings = new Settings();
+            string[] args = Environment.GetCommandLineArgs();
+            string tpath = null;
+            using (Process self = Process.GetCurrentProcess())
+            {
+                tpath = $"{Path.GetDirectoryName(self.MainModule.FileName)}\\NVIDIA_DNS.exe";
+            }
+            Settings settings = new Settings()
+            {
+                DNSpath = (args.Length == 2 && string.Equals(args[1], tpath, StringComparison.OrdinalIgnoreCase)) ? tpath : null
+            };
             this.MainWindow = settings;
             settings.Show();
         }

@@ -1,11 +1,15 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -26,13 +30,19 @@ namespace NVIDIA_HDV
         private readonly string[] uicsslist = null;
         private readonly string[] csslist = null;
 
-        public MainWindow(Window owner, string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] uicsslist, string[] csslist)
+        private volatile bool closeflag = false;
+
+        public MainWindow(Window owner, string httpsurl, string jsurl, string jsfile, Regex regex, string[] htmllist, string[] uicsslist, string[] csslist, bool DNS = false)
         {
             InitializeComponent();
             this.Owner = owner;
             if (owner is Settings settings)
             {
                 this.settings = settings;
+            }
+            else
+            {
+                throw new ArgumentException("WebView2 组件所在容器接收了无效的参数。");
             }
             this.HTTPSURL = httpsurl ?? string.Empty;
             this.JSURL = jsurl ?? string.Empty;
@@ -73,7 +83,7 @@ namespace NVIDIA_HDV
             this.BACK.PreviewMouseDown += blockmd;
             this.Closing += (s, e) =>
             {
-                if (this.WebView24WPF.CoreWebView2 == null)
+                if (this.WebView24WPF.CoreWebView2 == null || !closeflag)
                 {
                     e.Cancel = true;
                     return;
@@ -105,7 +115,7 @@ namespace NVIDIA_HDV
             this.BACK.IsEnabled = false;
             this.HOME.PreviewMouseUp += (s, e) =>
             {
-                if (e.ChangedButton == MouseButton.Left && MLBD == e.OriginalSource) this.WebView24WPF.Source = new Uri(HTTPSURL);
+                if (e.ChangedButton == MouseButton.Left && MLBD == e.OriginalSource) this.WebView24WPF.CoreWebView2.Navigate(HTTPSURL);
                 e.Handled = true;
             };
             this.FLUSH.PreviewMouseUp += (s, e) =>
@@ -132,6 +142,7 @@ namespace NVIDIA_HDV
                     SetWindowLongPtr(selfhandle, GWL_STYLE, style);
                     SetWindowPos(selfhandle, IntPtr.Zero, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED);
                 }
+                ReIP = DNS & this.settings.DNSfin;
                 _ = InitializeWebView().ContinueWith(t =>
                 {
                     throw t.Exception;
@@ -146,7 +157,54 @@ namespace NVIDIA_HDV
         private async Task InitializeWebView()
         {
             await this.WebView24WPF.EnsureCoreWebView2Async();
+            // await new SemaphoreSlim(0, 1).WaitAsync(); //...
             var coreWebView = this.WebView24WPF.CoreWebView2;
+            if (ReIP)
+            {
+                void __wv2nvcn(object s, CoreWebView2WebResourceResponseReceivedEventArgs e) => OnWebResourceResponseReceived(0, e);
+                void __wv2gfcn(object s, CoreWebView2WebResourceResponseReceivedEventArgs e) => OnWebResourceResponseReceived(1, e);
+                this.WebView24WPF.IsHitTestVisible = false;
+                this.WebView24WPF_Mask.Visibility = Visibility.Visible;
+                coreWebView.WebResourceResponseReceived += __wv2nvcn;
+                this.WebView24WPF.CoreWebView2.Navigate(Hosts[0]);
+                bool r0 = await IPWaiter.WaitAsync(10000);
+                coreWebView.WebResourceResponseReceived -= __wv2nvcn;
+                if (r0) cts_singles[0].Cancel();
+                coreWebView.WebResourceResponseReceived += __wv2gfcn;
+                this.WebView24WPF.CoreWebView2.Navigate(Hosts[1]);
+                bool r1 = await IPWaiter.WaitAsync(10000);
+                coreWebView.WebResourceResponseReceived -= __wv2gfcn;
+                if (r1) cts_singles[1].Cancel();
+                this.WebView24WPF.CoreWebView2.Navigate("about:blank");
+                if (string.IsNullOrWhiteSpace(FinalIP[0]) || string.IsNullOrWhiteSpace(FinalIP[1]))
+                {
+                    new Notify(this, $"IP 调优数据获取失败\n\n错误类型：{(r0 ? 0 : 1) + (r1 ? 0 : 2)}-{((IPs[0].Count == 0) ? 1 : 0) + ((IPs[1].Count == 0) ? 2 : 0)}\n本次实例将不再执行调优", false).ShowDialog();
+                }
+                else
+                {
+                    new Notify(this, $"已获取 IP 调优数据\n\nwww.nvidia.cn     ->  {FinalIP[0],15}\ngfwsl.geforce.cn  ->  {FinalIP[1],15}\n----------------\n数据将自动写入 hosts 文件，请确认杀毒软件不会拦截该操作", false).ShowDialog();
+                    ProcessStartInfo startInfo = new ProcessStartInfo
+                    {
+                        FileName = this.settings.DNSpath,
+                        Arguments = $"\"{FinalIP[0]}\" \"www.nvidia.cn\" \"{FinalIP[1]}\" \"gfwsl.geforce.cn\"",
+                        RedirectStandardOutput = false,
+                        RedirectStandardError = false,
+                        UseShellExecute = true,
+                        CreateNoWindow = false
+                    };
+                    using (Process process = new Process { StartInfo = startInfo })
+                    {
+                        process.Start();
+                        process.WaitForExit();
+                        Console.WriteLine($"[NVIDIA_DNS] -> {process.ExitCode}");
+                    }
+                }
+                this.settings.DNSfin = false;
+                coreWebView.Reload();
+                this.WebView24WPF_Mask.Visibility = Visibility.Collapsed;
+                this.WebView24WPF.IsHitTestVisible = true;
+                closeflag = true;
+            }
             coreWebView.AddWebResourceRequestedFilter(JSURL, CoreWebView2WebResourceContext.Script);
             foreach (var html in htmllist)
             {
@@ -161,10 +219,131 @@ namespace NVIDIA_HDV
                 coreWebView.AddWebResourceRequestedFilter(css, CoreWebView2WebResourceContext.Stylesheet‌);
             }
             coreWebView.WebResourceRequested += OnWebResourceRequested;
-            this.WebView24WPF.Source = new Uri(HTTPSURL);
+            this.WebView24WPF.CoreWebView2.Navigate(HTTPSURL);
             this.HOME.IsEnabled = true;
             this.FLUSH.IsEnabled = true;
             this.BACK.IsEnabled = true;
+        }
+
+        private bool ReIP = false;
+        private readonly string[] Hosts = new string[2] { "https://site.ip138.com/www.nvidia.cn/", "https://site.ip138.com/gfwsl.geforce.cn/" };
+        private readonly HashSet<string>[] IPs = new HashSet<string>[2] { new HashSet<string>(64, StringComparer.OrdinalIgnoreCase), new HashSet<string>(64, StringComparer.OrdinalIgnoreCase) };
+        private readonly string[] FinalIP = new string[2] { null, null };
+        private readonly SemaphoreSlim Single = new SemaphoreSlim(1, 1);
+        private readonly CancellationTokenSource[] cts_singles = new CancellationTokenSource[2] { new CancellationTokenSource(), new CancellationTokenSource() };
+        private readonly Regex jsonpreg = new Regex(@"^\w+\((.*)\)$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+        private readonly SemaphoreSlim IPWaiter = new SemaphoreSlim(0, 1);
+
+        private async Task CacheIPs(int index, string response)
+        {
+            await Single.WaitAsync();
+            try
+            {
+                if (cts_singles[index].IsCancellationRequested) return;
+                if (string.IsNullOrWhiteSpace(response)) return;
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                object json = serializer.DeserializeObject(response);
+                if (json is Dictionary<string, object> _json
+                    && _json.TryGetValue("status", out object status)
+                    && status is bool _status && _status
+                    && _json.TryGetValue("data", out object data)
+                    && data is object[] _data)
+                {
+                    foreach (var d in _data)
+                    {
+                        if (d is Dictionary<string, object> _d
+                            && _d.TryGetValue("ip", out object ip)
+                            && ip is string _ip)
+                        {
+                            IPs[index].Add(_ip);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { Console.WriteLine($"未知错误：{ex.Message}"); }
+            finally { Single.Release(); }
+        }
+
+        private async Task FindIP(int index, string response)
+        {
+            await Single.WaitAsync();
+            try
+            {
+                if (cts_singles[index].IsCancellationRequested) return;
+                if (string.IsNullOrWhiteSpace(response)) return;
+                Match match = jsonpreg.Match(response);
+                if (match.Success)
+                {
+                    JavaScriptSerializer serializer = new JavaScriptSerializer();
+                    object json = serializer.DeserializeObject(match.Groups[1].Value);
+                    if (json is Dictionary<string, object> _json
+                        && _json.TryGetValue("ip", out object ip)
+                        && ip is string _ip
+                        && _json.TryGetValue("data", out object data)
+                        && data != null && data is object[] _data)
+                    {
+                        foreach (var d in _data)
+                        {
+                            if (FinalIP[index] == null
+                                && d is string _d && string.Equals(_d.Trim(), "美国")
+                                && IPs[index].Contains(_ip))
+                            {
+                                FinalIP[index] = _ip;
+                                cts_singles[index].Cancel();
+                                IPWaiter.Release();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { Console.WriteLine($"未知错误：{ex.Message}"); }
+            finally { Single.Release(); }
+        }
+
+        private async void OnWebResourceResponseReceived(int index, CoreWebView2WebResourceResponseReceivedEventArgs e)
+        {
+            try
+            {
+                string requestUri = e.Request.Uri;
+                string method = e.Request.Method;
+                if (method == "GET")
+                {
+                    if ((requestUri.StartsWith("https://site.ip138.com/domain/read.do?domain=www.nvidia.cn", StringComparison.OrdinalIgnoreCase)
+                        || requestUri.StartsWith("https://site.ip138.com/domain/read.do?domain=gfwsl.geforce.cn", StringComparison.OrdinalIgnoreCase))
+                        && e.Response.Headers.GetHeader("Content-Type").StartsWith("text/html", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (cts_singles[index].IsCancellationRequested) return;
+                        using (Stream contentStream = await e.Response.GetContentAsync())
+                        {
+                            if (contentStream != null)
+                            {
+                                using (StreamReader reader = new StreamReader(contentStream, Encoding.UTF8))
+                                {
+                                    _ = CacheIPs(index, await reader.ReadToEndAsync());
+                                }
+                            }
+                        }
+                    }
+                    else if (requestUri.StartsWith("https://api.ipshudi.com/query/?", StringComparison.OrdinalIgnoreCase)
+                        && e.Response.Headers.GetHeader("Content-Type").StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using (Stream contentStream = await e.Response.GetContentAsync())
+                        {
+                            if (contentStream != null)
+                            {
+                                using (StreamReader reader = new StreamReader(contentStream, Encoding.UTF8))
+                                {
+                                    _ = FindIP(index, await reader.ReadToEndAsync());
+                                }
+                            }
+                        }
+                    }
+                    else { return; }
+                }
+            }
+            catch (COMException) { Console.WriteLine("WebView2 -> 底层COM异常，由导航中断触发，属正常现象"); }
+            catch (Exception) { }
         }
 
         private async void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
