@@ -165,17 +165,56 @@ namespace NVIDIA_HDV
                 void __wv2gfcn(object s, CoreWebView2WebResourceResponseReceivedEventArgs e) => OnWebResourceResponseReceived(1, e);
                 this.WebView24WPF.IsHitTestVisible = false;
                 this.WebView24WPF_Mask.Visibility = Visibility.Visible;
-                coreWebView.WebResourceResponseReceived += __wv2nvcn;
-                this.WebView24WPF.CoreWebView2.Navigate(Hosts[0]);
-                bool r0 = await IPWaiter.WaitAsync(10000);
-                coreWebView.WebResourceResponseReceived -= __wv2nvcn;
-                if (r0) cts_singles[0].Cancel();
-                coreWebView.WebResourceResponseReceived += __wv2gfcn;
-                this.WebView24WPF.CoreWebView2.Navigate(Hosts[1]);
-                bool r1 = await IPWaiter.WaitAsync(10000);
-                coreWebView.WebResourceResponseReceived -= __wv2gfcn;
-                if (r1) cts_singles[1].Cancel();
-                this.WebView24WPF.CoreWebView2.Navigate("about:blank");
+                int retry;
+                retry = 0;
+                bool r0 = false;
+                do
+                {
+                    IPs[0].Clear();
+                    Count[0] = 0;
+                    cts_singles[0].Dispose();
+                    cts_singles[0] = new CancellationTokenSource();
+                    coreWebView.WebResourceResponseReceived += __wv2nvcn;
+                    if (retry == 0)
+                    {
+                        coreWebView.Navigate(Hosts[0]);
+                    }
+                    else
+                    {
+                        coreWebView.Reload();
+                    }
+                    r0 = await IPWaiter.WaitAsync(10000);
+                    coreWebView.WebResourceResponseReceived -= __wv2nvcn;
+                    if (r0) cts_singles[0].Cancel();
+                    await Task.Delay(500);
+                    if (!string.IsNullOrWhiteSpace(FinalIP[0])) break;
+                    retry++;
+                } while (retry < 3);
+                retry = 0;
+                bool r1 = false;
+                do
+                {
+                    IPs[1].Clear();
+                    Count[1] = 0;
+                    cts_singles[1].Dispose();
+                    cts_singles[1] = new CancellationTokenSource();
+                    coreWebView.WebResourceResponseReceived += __wv2gfcn;
+                    if (retry == 0)
+                    {
+                        coreWebView.Navigate(Hosts[1]);
+                    }
+                    else
+                    {
+                        coreWebView.Reload();
+                    }
+                    r1 = await IPWaiter.WaitAsync(10000);
+                    coreWebView.WebResourceResponseReceived -= __wv2gfcn;
+                    if (r1) cts_singles[1].Cancel();
+                    await Task.Delay(500);
+                    if (!string.IsNullOrWhiteSpace(FinalIP[1])) break;
+                    retry++;
+                } while (retry < 3);
+                coreWebView.Navigate("about:blank");
                 if (string.IsNullOrWhiteSpace(FinalIP[0]) || string.IsNullOrWhiteSpace(FinalIP[1]))
                 {
                     new Notify(this, $"IP 调优数据获取失败\n\n错误类型：{(r0 ? 0 : 1) + (r1 ? 0 : 2)}-{((IPs[0].Count == 0) ? 1 : 0) + ((IPs[1].Count == 0) ? 2 : 0)}\n本次实例将不再执行调优", false).ShowDialog();
@@ -194,17 +233,23 @@ namespace NVIDIA_HDV
                     };
                     using (Process process = new Process { StartInfo = startInfo })
                     {
+                        IntPtr handle = new WindowInteropHelper(this).Handle;
+                        EnableWindow(handle, false);
                         process.Start();
-                        process.WaitForExit();
+                        await Task.Factory.StartNew(() =>
+                        {
+                            process.WaitForExit();
+                        }, TaskCreationOptions.LongRunning);
                         Console.WriteLine($"[NVIDIA_DNS] -> {process.ExitCode}");
+                        EnableWindow(handle, true);
                     }
                 }
                 this.settings.DNSfin = false;
                 coreWebView.Reload();
                 this.WebView24WPF_Mask.Visibility = Visibility.Collapsed;
                 this.WebView24WPF.IsHitTestVisible = true;
-                closeflag = true;
             }
+            closeflag = true;
             coreWebView.AddWebResourceRequestedFilter(JSURL, CoreWebView2WebResourceContext.Script);
             foreach (var html in htmllist)
             {
@@ -219,7 +264,7 @@ namespace NVIDIA_HDV
                 coreWebView.AddWebResourceRequestedFilter(css, CoreWebView2WebResourceContext.Stylesheet‌);
             }
             coreWebView.WebResourceRequested += OnWebResourceRequested;
-            this.WebView24WPF.CoreWebView2.Navigate(HTTPSURL);
+            coreWebView.Navigate(HTTPSURL);
             this.HOME.IsEnabled = true;
             this.FLUSH.IsEnabled = true;
             this.BACK.IsEnabled = true;
@@ -228,6 +273,7 @@ namespace NVIDIA_HDV
         private bool ReIP = false;
         private readonly string[] Hosts = new string[2] { "https://site.ip138.com/www.nvidia.cn/", "https://site.ip138.com/gfwsl.geforce.cn/" };
         private readonly HashSet<string>[] IPs = new HashSet<string>[2] { new HashSet<string>(64, StringComparer.OrdinalIgnoreCase), new HashSet<string>(64, StringComparer.OrdinalIgnoreCase) };
+        private readonly int[] Count = new int[2] { 0, 0 };
         private readonly string[] FinalIP = new string[2] { null, null };
         private readonly SemaphoreSlim Single = new SemaphoreSlim(1, 1);
         private readonly CancellationTokenSource[] cts_singles = new CancellationTokenSource[2] { new CancellationTokenSource(), new CancellationTokenSource() };
@@ -247,7 +293,7 @@ namespace NVIDIA_HDV
                     && _json.TryGetValue("status", out object status)
                     && status is bool _status && _status
                     && _json.TryGetValue("data", out object data)
-                    && data is object[] _data)
+                    && data != null && data is object[] _data)
                 {
                     foreach (var d in _data)
                     {
@@ -277,11 +323,14 @@ namespace NVIDIA_HDV
                     JavaScriptSerializer serializer = new JavaScriptSerializer();
                     object json = serializer.DeserializeObject(match.Groups[1].Value);
                     if (json is Dictionary<string, object> _json
+                        && _json.TryGetValue("ret", out object ret)
+                        && ret is string _ret && string.Equals(_ret, "ok", StringComparison.OrdinalIgnoreCase)
                         && _json.TryGetValue("ip", out object ip)
                         && ip is string _ip
                         && _json.TryGetValue("data", out object data)
                         && data != null && data is object[] _data)
                     {
+                        Count[index]++;
                         foreach (var d in _data)
                         {
                             if (FinalIP[index] == null
@@ -293,6 +342,12 @@ namespace NVIDIA_HDV
                                 IPWaiter.Release();
                                 return;
                             }
+                        }
+                        if (IPs[index].Count != 0 && Count[index] == IPs[index].Count)
+                        {
+                            cts_singles[index].Cancel();
+                            IPWaiter.Release();
+                            return;
                         }
                     }
                 }
@@ -485,5 +540,10 @@ namespace NVIDIA_HDV
         private const int SWP_FRAMECHANGED = 0x0020;
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, int wFlags);
+
+
+
+        [DllImport("user32.dll")]
+        private extern static bool EnableWindow(IntPtr hWnd, bool bEnable);
     }
 }
