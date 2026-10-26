@@ -18,6 +18,10 @@ namespace NVIDIA_DNS
 
         private static readonly TimeSpan frame = TimeSpan.FromMilliseconds(1000D / 30D);
 
+        private static IntPtr owner = IntPtr.Zero;
+
+        private static IntPtr handle = IntPtr.Zero;
+
         public static async Task Main(string[] args)
         {
             Console.Title = "NVIDIA_DNS · FeiLingshu";
@@ -40,8 +44,45 @@ namespace NVIDIA_DNS
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.Write(" 按任意键退出...");
                 Console.ReadKey(true);
+                if (owner != IntPtr.Zero)
+                {
+                    EnableWindow(owner, true);
+                    SetWindowLongPtr(handle, GWLP_HWNDPARENT, 0);
+                    // SetWindowPos(owner, new IntPtr(0), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+                }
                 Environment.Exit(unchecked((int)0xC000013A));
             };
+            string[] _args = null;
+            int _owner = 0;
+            if ((args.Length == 5 && int.TryParse(args[4], out _owner))
+                || args.Length == 4)
+            {
+                owner = new IntPtr(_owner);
+                handle = GetConsoleWindow();
+                _args = new string[4];
+                Array.Copy(args, _args, 4);
+            }
+            else
+            {
+                throw new ArgumentException("未识别到命令行参数。");
+            }
+            if (owner != IntPtr.Zero)
+            {
+                if (handle != IntPtr.Zero)
+                {
+                    long style = GetWindowLongPtr(handle, GWL_STYLE);
+                    if (style != 0)
+                    {
+                        style &= ~WS_MAXIMIZEBOX;
+                        style &= ~WS_MINIMIZEBOX;
+                        SetWindowLongPtr(handle, GWL_STYLE, style);
+                    }
+                    SetWindowLongPtr(handle, GWLP_HWNDPARENT, owner.ToInt64());
+                    SetWindowPos(handle, new IntPtr(0), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_FRAMECHANGED);
+                    SetWindowPos(owner, handle, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+                }
+                EnableWindow(owner, false);
+            }
             Console.ForegroundColor = ConsoleColor.DarkGreen;
             Console.WriteLine();
             Console.Write(" NVIDIA_DNS");
@@ -66,11 +107,10 @@ namespace NVIDIA_DNS
             Console.ForegroundColor = ccf;
             Console.WriteLine("为 NVIDIA_HDV 开发");
             await Task.Delay(frame);
-            if (args.Length == 4
-                && !string.IsNullOrWhiteSpace(args[0] = args[0].Replace(" ", string.Empty)) && IPAddress.TryParse(args[0], out _)
-                && !string.IsNullOrWhiteSpace(args[1] = args[1].Replace(" ", string.Empty))
-                && !string.IsNullOrWhiteSpace(args[2] = args[2].Replace(" ", string.Empty)) && IPAddress.TryParse(args[2], out _)
-                && !string.IsNullOrWhiteSpace(args[3] = args[3].Replace(" ", string.Empty)))
+            if (!string.IsNullOrWhiteSpace(_args[0] = _args[0].Replace(" ", string.Empty)) && IPAddress.TryParse(_args[0], out _)
+                && !string.IsNullOrWhiteSpace(_args[1] = _args[1].Replace(" ", string.Empty))
+                && !string.IsNullOrWhiteSpace(_args[2] = _args[2].Replace(" ", string.Empty)) && IPAddress.TryParse(_args[2], out _)
+                && !string.IsNullOrWhiteSpace(_args[3] = _args[3].Replace(" ", string.Empty)))
             {
                 Console.ForegroundColor = ConsoleColor.DarkGreen;
                 Console.Write(" NVIDIA_DNS");
@@ -81,15 +121,15 @@ namespace NVIDIA_DNS
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.Write(" · ");
                 Console.ForegroundColor = ccf;
-                Console.Write($"{args[0],-17}");
+                Console.Write($"{_args[0],-17}");
                 Console.ForegroundColor = ConsoleColor.Blue;
-                Console.WriteLine($"{args[1]}");
+                Console.WriteLine($"{_args[1]}");
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.Write(" · ");
                 Console.ForegroundColor = ccf;
-                Console.Write($"{args[2],-17}");
+                Console.Write($"{_args[2],-17}");
                 Console.ForegroundColor = ConsoleColor.Blue;
-                Console.WriteLine($"{args[3]}");
+                Console.WriteLine($"{_args[3]}");
                 await Task.Delay(frame);
                 try
                 {
@@ -115,8 +155,8 @@ namespace NVIDIA_DNS
                     if (hosts.IsReadOnly) hosts.IsReadOnly = false;
                     string[] lines = File.ReadAllLines(HOSTS_FILE_PATH, Encoding.Default);
                     StringBuilder sb = new StringBuilder();
-                    string line1 = $"{args[0],-17}{args[1]}";
-                    string line2 = $"{args[2],-17}{args[3]}";
+                    string line1 = $"{_args[0],-17}{_args[1]}";
+                    string line2 = $"{_args[2],-17}{_args[3]}";
                     foreach (string line in lines)
                     {
                         string tline = line.Trim();
@@ -125,8 +165,8 @@ namespace NVIDIA_DNS
                             List<string> parts = tline.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).ToList();
                             if (parts.Count == 2)
                             {
-                                if (parts[1].Equals(args[1], StringComparison.OrdinalIgnoreCase)
-                                    || parts[1].Equals(args[3], StringComparison.OrdinalIgnoreCase))
+                                if (parts[1].Equals(_args[1], StringComparison.OrdinalIgnoreCase)
+                                    || parts[1].Equals(_args[3], StringComparison.OrdinalIgnoreCase))
                                 {
                                     continue;
                                 }
@@ -136,8 +176,8 @@ namespace NVIDIA_DNS
                                 List<int> indexlist = new List<int>(parts.Count - 1);
                                 for (int i = 1; i < parts.Count; i++)
                                 {
-                                    if (parts[i].Equals(args[1], StringComparison.OrdinalIgnoreCase)
-                                        || parts[i].Equals(args[3], StringComparison.OrdinalIgnoreCase))
+                                    if (parts[i].Equals(_args[1], StringComparison.OrdinalIgnoreCase)
+                                        || parts[i].Equals(_args[3], StringComparison.OrdinalIgnoreCase))
                                     {
                                         indexlist.Add(i);
                                     }
@@ -227,6 +267,12 @@ namespace NVIDIA_DNS
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.Write(" 按任意键退出...");
             Console.ReadKey(true);
+            if (owner != IntPtr.Zero)
+            {
+                EnableWindow(owner, true);
+                SetWindowLongPtr(handle, GWLP_HWNDPARENT, 0);
+                // SetWindowPos(owner, new IntPtr(0), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+            }
             Environment.Exit(0);
         }
 
@@ -252,7 +298,56 @@ namespace NVIDIA_DNS
                 exception.StackTrace);
             Console.Write(" 按任意键退出...");
             Console.ReadKey(true);
+            if (owner != IntPtr.Zero)
+            {
+                EnableWindow(owner, true);
+                SetWindowLongPtr(handle, GWLP_HWNDPARENT, 0);
+                // SetWindowPos(owner, new IntPtr(0), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+            }
             Environment.Exit(Marshal.GetHRForException(exception));
         }
+
+
+
+        [DllImport("kernel32.dll")]
+        private extern static IntPtr GetConsoleWindow();
+
+        private const int GWLP_HWNDPARENT = -8;
+        
+        private const int GWL_STYLE = -16;
+
+        private const int WS_MAXIMIZEBOX = 0x00010000;
+
+        private const int WS_MINIMIZEBOX = 0x00020000;
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern long GetWindowLong32(IntPtr hWnd, long nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern long GetWindowLong64(IntPtr hWnd, long nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLong", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern long SetWindowLong32(IntPtr hWnd, int nIndex, long dwNewLong);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern long SetWindowLong64(IntPtr hWnd, int nIndex, long dwNewLong);
+
+        private static long GetWindowLongPtr(IntPtr hWnd, int nIndex) => Environment.Is64BitProcess ? GetWindowLong64(hWnd, nIndex) : GetWindowLong32(hWnd, nIndex);
+
+        private static long SetWindowLongPtr(IntPtr hWnd, int nIndex, long dwNewLong) => Environment.Is64BitProcess ? SetWindowLong64(hWnd, nIndex, dwNewLong) : SetWindowLong32(hWnd, nIndex, dwNewLong);
+
+        private const int SWP_NOSIZE = 0x0001;
+
+        private const int SWP_NOMOVE = 0x0002;
+
+        private const int SWP_NOACTIVATE = 0x0010;
+
+        private const int SWP_FRAMECHANGED = 0x0020;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, int wFlags);
+
+        [DllImport("user32.dll")]
+        private extern static bool EnableWindow(IntPtr hWnd, bool bEnable);
     }
 }

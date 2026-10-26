@@ -1,4 +1,5 @@
 ﻿using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,8 +12,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace NVIDIA_HDV
 {
@@ -128,6 +132,7 @@ namespace NVIDIA_HDV
                 if (e.ChangedButton == MouseButton.Left && MLBD == e.OriginalSource) this.WebView24WPF.GoBack();
                 e.Handled = true;
             };
+            SetBinding(this.WebView24WPF);
             this.ContentRendered += (s, e) =>
             {
                 IntPtr selfhandle = new WindowInteropHelper(this).Handle;
@@ -153,10 +158,24 @@ namespace NVIDIA_HDV
         private object MLBD = null;
         private object MRBD = null;
 
+        private void SetBinding(WebView2CompositionControl wv2) => this.NULLPART.SetBinding(TextBlock.TextProperty, new Binding("Source.AbsoluteUri") { Source = wv2 });
+
+        private void AutoHidden(object sender, CoreWebView2SourceChangedEventArgs e)
+        {
+            if (e.IsNewDocument)
+            {
+                string url = (sender as WebView2CompositionControl)?.Source?.AbsoluteUri;
+                this.WebView24WPF_Hidden.Visibility = (string.IsNullOrWhiteSpace(url) || string.Equals(url, "about:blank", StringComparison.OrdinalIgnoreCase))
+                    ? Visibility.Visible
+                    : Visibility.Hidden;
+            }
+        }
+
         private readonly CancellationTokenSource cts = new CancellationTokenSource();
         private async Task InitializeWebView()
         {
             await this.WebView24WPF.EnsureCoreWebView2Async();
+            this.WebView24WPF_Container.Opacity = 1;
             // await new SemaphoreSlim(0, 1).WaitAsync(); //...
             var coreWebView = this.WebView24WPF.CoreWebView2;
             if (ReIP)
@@ -222,10 +241,11 @@ namespace NVIDIA_HDV
                 else
                 {
                     new Notify(this, $"已获取 IP 调优数据\n\nwww.nvidia.cn     ->  {FinalIP[0],15}\ngfwsl.geforce.cn  ->  {FinalIP[1],15}\n----------------\n数据将自动写入 hosts 文件，请确认杀毒软件不会拦截该操作", false).ShowDialog();
+                    IntPtr handle = new WindowInteropHelper(this).Handle;
                     ProcessStartInfo startInfo = new ProcessStartInfo
                     {
                         FileName = this.settings.DNSpath,
-                        Arguments = $"\"{FinalIP[0]}\" \"www.nvidia.cn\" \"{FinalIP[1]}\" \"gfwsl.geforce.cn\"",
+                        Arguments = $"\"{FinalIP[0]}\" \"www.nvidia.cn\" \"{FinalIP[1]}\" \"gfwsl.geforce.cn\" \"{handle.ToInt32()}\"",
                         RedirectStandardOutput = false,
                         RedirectStandardError = false,
                         UseShellExecute = true,
@@ -233,8 +253,6 @@ namespace NVIDIA_HDV
                     };
                     using (Process process = new Process { StartInfo = startInfo })
                     {
-                        IntPtr handle = new WindowInteropHelper(this).Handle;
-                        EnableWindow(handle, false);
                         process.Start();
                         await Task.Factory.StartNew(() =>
                         {
@@ -242,14 +260,44 @@ namespace NVIDIA_HDV
                         }, TaskCreationOptions.LongRunning);
                         Console.WriteLine($"[NVIDIA_DNS] -> {process.ExitCode}");
                         EnableWindow(handle, true);
+                        SetWindowPos(handle, new IntPtr(0), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+                        this.Activate();
                     }
                 }
                 this.settings.DNSfin = false;
-                coreWebView.Reload();
+                //...
+                var wv2 = new WebView2CompositionControl()
+                {
+                    Source = new Uri("about:blank"),
+                    Background = new SolidColorBrush(Color.FromArgb(0xff, 0x20, 0x20, 0x20)),
+                    Foreground = new SolidColorBrush(Color.FromArgb(0xff, 0xc0, 0xc0, 0xc0)),
+                    AllowExternalDrop = false,
+                    ClipToBounds = true
+                };
+                ScrollViewer.SetHorizontalScrollBarVisibility(wv2, ScrollBarVisibility.Auto);
+                ScrollViewer.SetVerticalScrollBarVisibility(wv2, ScrollBarVisibility.Auto);
+                int index = this.WebView24WPF_Container.Children.IndexOf(this.WebView24WPF);
+                if (index >= 0)
+                {
+                    this.WebView24WPF_Mask.Opacity = 1;
+                    this.WebView24WPF.Stop();
+                    this.WebView24WPF.Dispose();
+                    this.WebView24WPF_Container.UnregisterName("WebView24WPF");
+                    this.WebView24WPF_Container.RegisterName("WebView24WPF", wv2);
+                    this.WebView24WPF_Container.Children.RemoveAt(index);
+                    this.WebView24WPF_Container.Children.Insert(index, wv2);
+                    this.WebView24WPF = wv2;
+                    SetBinding(this.WebView24WPF);
+                }
+                GC.Collect(2, GCCollectionMode.Forced, blocking: false, compacting: false);
+                await this.WebView24WPF.EnsureCoreWebView2Async();
+                coreWebView = this.WebView24WPF.CoreWebView2;
                 this.WebView24WPF_Mask.Visibility = Visibility.Collapsed;
                 this.WebView24WPF.IsHitTestVisible = true;
             }
             closeflag = true;
+            this.WebView24WPF_Hidden.Visibility = Visibility.Visible;
+            this.WebView24WPF.SourceChanged += AutoHidden;
             coreWebView.AddWebResourceRequestedFilter(JSURL, CoreWebView2WebResourceContext.Script);
             foreach (var html in htmllist)
             {
@@ -500,48 +548,35 @@ namespace NVIDIA_HDV
 
 
         private const int GWL_STYLE = -16;
+
         private const int WS_MAXIMIZEBOX = 0x00010000;
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern long GetWindowLong32(IntPtr hWnd, long nIndex);
 
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern long GetWindowLong64(IntPtr hWnd, long nIndex);
-        [DllImport("user32.dll", EntryPoint = "GetWindowLong", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern long GetWindowLong32(IntPtr hWnd, long nIndex);
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern long SetWindowLong64(IntPtr hWnd, int nIndex, long dwNewLong);
+
         [DllImport("user32.dll", EntryPoint = "SetWindowLong", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern long SetWindowLong32(IntPtr hWnd, int nIndex, long dwNewLong);
 
-        private static long GetWindowLongPtr(IntPtr hWnd, int nIndex)
-        {
-            if (Environment.Is64BitProcess)
-            {
-                return GetWindowLong64(hWnd, nIndex);
-            }
-            else
-            {
-                return GetWindowLong32(hWnd, nIndex);
-            }
-        }
-        private static long SetWindowLongPtr(IntPtr hWnd, int nIndex, long dwNewLong)
-        {
-            if (Environment.Is64BitProcess)
-            {
-                return SetWindowLong64(hWnd, nIndex, dwNewLong);
-            }
-            else
-            {
-                return SetWindowLong32(hWnd, nIndex, dwNewLong);
-            }
-        }
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern long SetWindowLong64(IntPtr hWnd, int nIndex, long dwNewLong);
+
+        private static long GetWindowLongPtr(IntPtr hWnd, int nIndex) => Environment.Is64BitProcess ? GetWindowLong64(hWnd, nIndex) : GetWindowLong32(hWnd, nIndex);
+
+        private static long SetWindowLongPtr(IntPtr hWnd, int nIndex, long dwNewLong) => Environment.Is64BitProcess ? SetWindowLong64(hWnd, nIndex, dwNewLong) : SetWindowLong32(hWnd, nIndex, dwNewLong);
+
+        private const int SWP_NOSIZE = 0x0001;
+
+        private const int SWP_NOMOVE = 0x0002;
 
         private const int SWP_NOZORDER = 0x0004;
-        private const int SWP_NOMOVE = 0x0002;
-        private const int SWP_NOSIZE = 0x0001;
+
         private const int SWP_FRAMECHANGED = 0x0020;
+
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, int wFlags);
-
-
 
         [DllImport("user32.dll")]
         private extern static bool EnableWindow(IntPtr hWnd, bool bEnable);

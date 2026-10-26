@@ -4,7 +4,6 @@
     <ProjectView>ProjectFiles</ProjectView>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
-    <StartArguments>
-    </StartArguments>
+    <StartArguments>"C:\FeiLingshu\Projects\NVIDIA_HDV\NVIDIA_HDV\bin\Debug\NVIDIA_DNS.exe"</StartArguments>
   </PropertyGroup>
 </Project>

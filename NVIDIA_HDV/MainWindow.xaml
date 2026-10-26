@@ -46,7 +46,7 @@
                 UseLayoutRounding="True"
                 Margin="100,5,100,5"
                 IsHitTestVisible="False"
-                Text="{Binding Source.AbsoluteUri, ElementName=WebView24WPF, Mode=OneWay}"
+                Text=""
                 x:Name="NULLPART">
             </TextBlock>
             <Border
@@ -343,7 +343,7 @@
         <Grid
             x:Name="WebView24WPF_Container"
             Margin="0,30,0,0"
-            Opacity="1">
+            Opacity="0">
             <wv2:WebView2CompositionControl
                 Name="WebView24WPF"
                 Source="{x:Null}"
@@ -353,6 +353,11 @@
                 ClipToBounds="True"
                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
+            <Border
+                x:Name="WebView24WPF_Hidden"
+                Background="#FF202020"
+                ClipToBounds="True"
+                Visibility="Hidden" />
             <Border
                 x:Name="WebView24WPF_Mask"
                 Background="#FF202020"
