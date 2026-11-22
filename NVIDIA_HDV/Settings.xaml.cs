@@ -435,7 +435,7 @@ namespace NVIDIA_HDV
                 if ((strings.Contains("nav-header") && strings.Contains("desktop-nav"))
                     || strings.Contains("global-footer-container")
                     || strings.Contains("global-footer")
-                    /*|| strings.Contains("color-black")*/)
+                    || (strings.Count == 1 && strings.Contains("color-black")))
                 {
                     return $"{match.Groups[1].Value}nv-dark {match.Groups[2].Value}{match.Groups[3].Value}";
                 }
