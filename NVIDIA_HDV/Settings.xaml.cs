@@ -157,7 +157,7 @@ namespace NVIDIA_HDV
                         await result_theme;
                         if (result_theme.IsCompleted && !string.IsNullOrEmpty(result_theme.Result.Trim()))
                         {
-                            var urls = result_theme.Result.Trim().Split('\n');
+                            var urls = result_theme.Result.Trim().Split(new char[1] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
                             foreach (var url in urls)
                             {
                                 if (!IsValidUrl(url)) continue;
@@ -188,7 +188,7 @@ namespace NVIDIA_HDV
                         await result_2;
                         if (result_2.IsCompleted && !string.IsNullOrEmpty(result_2.Result.Trim()))
                         {
-                            BETADATA = result_2.Result.Trim().Split('\n');
+                            BETADATA = result_2.Result.Trim().Split(new char[1] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
                             BETA = true;
                         }
                         else
@@ -431,13 +431,17 @@ namespace NVIDIA_HDV
             origin = HtmlRegex[1].Replace(origin, "$0nv-dark ");
             origin = HtmlRegex[2].Replace(origin, match =>
             {
-                HashSet<string> strings = new HashSet<string>(match.Groups[2].Value.Split(' '), StringComparer.OrdinalIgnoreCase);
+                HashSet<string> strings = new HashSet<string>(match.Groups[2].Value.Split(new char[1] { ' ' }, StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
                 if ((strings.Contains("nav-header") && strings.Contains("desktop-nav"))
                     || strings.Contains("global-footer-container")
                     || strings.Contains("global-footer")
                     || (strings.Count == 1 && strings.Contains("color-black")))
                 {
                     return $"{match.Groups[1].Value}nv-dark {match.Groups[2].Value}{match.Groups[3].Value}";
+                }
+                if (strings.Count == 1 && strings.Contains("description"))
+                {
+                    return $"{match.Groups[1].Value}description-dark{match.Groups[3].Value}";
                 }
                 if (strings.Contains("nv-teaser--bg-white"))
                 {
